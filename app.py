@@ -11,24 +11,17 @@ import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.models as models
-class FineTunedResNet(nn.Module):
-    def __init__(self, num_classes=33):
-        super(FineTunedResNet, self).__init__()
-        resnet = models.resnet18(pretrained=True)
-        self.features = nn.Sequential(*list(resnet.children())[:-2])
-        self.conv1x1 = nn.Conv2d(resnet.fc.in_features, 512, kernel_size=1)
+
+with open('./data/allergens.txt', 'r') as file:
+    allergens = [line.strip() for line in file]
+class FineTunedDenseNet(nn.Module):
+    def __init__(self, num_classes=len(allergens)):
+        super(FineTunedDenseNet, self).__init__()
+        densenet = models.densenet121(pretrained=True)
+        self.features = densenet.features
+        self.conv1x1 = nn.Conv2d(densenet.classifier.in_features, 512, kernel_size=1)
         self.bn1 = nn.BatchNorm2d(512)
         self.dropout = nn.Dropout(0.5)
-        self.bottleneck = nn.Sequential(
-            nn.Conv2d(512, 256, kernel_size=1),
-            nn.BatchNorm2d(256),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(256, 256, kernel_size=3, padding=1),
-            nn.BatchNorm2d(256),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(256, 512, kernel_size=1),
-            nn.BatchNorm2d(512),
-        )
         self.fc = nn.Linear(512, num_classes)
 
     def forward(self, x):
@@ -38,13 +31,14 @@ class FineTunedResNet(nn.Module):
         x = self.bn1(x)
         x = F.relu(x, inplace=True)
         x = self.dropout(x)
-        x = self.bottleneck(x)
         x = x.view(x.size(0), -1)
         x = self.fc(x)
         return x
 
+def Model():
+    return FineTunedDenseNet()
 
-model = FineTunedResNet()
+model = Model()
 model.load_state_dict(torch.load('./FineTunedDenseNet_allergens_model_1e-4.pth', map_location='cpu'))
 model.cpu()
 model.eval()
@@ -55,8 +49,6 @@ transform = transforms.Compose([
 ])
 
 st.title("lxhyylian-Food Allergens Recognition With FineTunedDenseNet")
-with open('./data/allergens.txt', 'r') as file:
-    allergens = [line.strip() for line in file]
 uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
 
 if uploaded_file is not None:
